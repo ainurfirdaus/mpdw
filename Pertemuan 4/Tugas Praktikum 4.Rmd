@@ -1,0 +1,1314 @@
+---
+title: '[MPDW] Tugas Praktikum 4'
+author: "Ainur Roudlotul Jannah Firdaus"
+date: "2026-09-23"
+output:
+  rmdformats::readthedown:
+    self_contained: true
+    thumbnails: false
+    lightbox: true
+    gallery: false
+    toc_depth: 5
+---
+
+```{r}
+library(tseries)
+```
+```{r}
+library(MASS)
+```
+
+
+# MA(2)
+
+## Pembangkitan Data Manual
+
+### Pembangkitan Data
+```{r}
+set.seed(1234)
+
+n <- 300
+wn <- rnorm(n)
+
+theta1 <- 0.4
+theta2 <- 0.6
+
+ma2 <- c(1:n)
+
+ma2[1] <- wn[1]
+ma2[2] <- wn[2] + theta1 * wn[1]
+
+for(i in 3:n){
+  ma2[i] <- wn[i] + theta1 * wn[i-1] + theta2 * wn[i-2]
+}
+
+ma2
+```
+### Plot
+
+#### Plot Time Series
+
+```{r}
+ts.plot(ma2,
+        main = "Time Series MA(2) Manual",
+        ylab = "Yt",
+        xlab = "Waktu")
+```
+Berdasarkan plot time series, data berfluktuasi di sekitar rata-rata yang relatif konstan dan tidak menunjukkan adanya tren maupun pola musiman yang jelas. Varians data juga terlihat relatif stabil sepanjang waktu.
+
+#### Plot ACF
+
+```{r}
+acf(ma2,
+    lag.max = 20,
+    main = "ACF MA(2) Manual")
+```
+Berdasarkan plot ACF MA(2) manual, terlihat bahwa autokorelasi signifikan pada lag 1 dan lag 2, kemudian terputus setelah lag ke-2. Pola cut-off pada lag ke-2 ini menunjukkan karakteristik proses MA(2), sehingga hasil ACF mendukung bahwa data mengikuti model MA(2)
+
+#### Plot PACF
+
+```{r}
+pacf(ma2,
+     lag.max = 20,
+     main = "PACF MA(2) Manual")
+```
+Berdasarkan plot PACF MA(2) manual, terlihat bahwa nilai PACF tidak terputus secara jelas pada lag tertentu, tetapi cenderung menurun dan berfluktuasi di sekitar nol. Pola tailing off pada PACF merupakan karakteristik dari model MA(2)
+
+#### Plot EACF
+
+```{r}
+TSA::eacf(ma2)
+```
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(0) dan ordo MA(2)
+
+#### Identifikasi Stasioneritas
+
+```{r}
+adf.test(ma2)
+```
+\(H_0\) : Data tidak stasioner dalam rataan
+\(H_1\) : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series, plot ACF, plot PACF, plot EACF
+
+```{r}
+# Geser data agar seluruh nilai positif
+ma2_pos <- ma2 - min(ma2) + 1
+
+# Box-Cox
+index_ma <- seq(1, 300)
+
+bc_ma <- MASS::boxcox(
+  ma2_pos ~ index_ma,
+  lambda = seq(-2, 6, by = 0.01)
+)
+```
+
+```{r}
+# Lambda optimum
+lambda_ma <- bc_ma$x[which.max(bc_ma$y)]
+lambda_ma
+```
+```{r}
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda_ma <- bc_ma$x[
+  bc_ma$y > max(bc_ma$y) - 0.5 * qchisq(0.95, 1)
+]
+
+# Batas bawah dan batas atas
+ci_lower_ma <- min(ci_lambda_ma)
+ci_upper_ma <- max(ci_lambda_ma)
+
+c(Batas_Bawah = ci_lower_ma,
+  Batas_Atas = ci_upper_ma)
+```
+Hasil uji di atas menunjukkan nilai rounded value (λ) optimum sebesar 1 dan pada selang kepercayaan 95% nilai memiliki batas bawah 0,70 dan batas atas 1.31. Selang tersebut memuat nilai 1 sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam
+
+### Scatter Plot
+
+#### \(Y_t\) dengan \(Y_{t-1}\)
+
+```{r}
+# Yt
+yt_ma2 <- ma2[-1]
+
+# Yt-1
+yt_1_ma2 <- ma2[-300]
+
+# Scatterplot
+plot(y = yt_ma2,
+     x = yt_1_ma2,
+     main = "Yt vs Yt-1",
+     xlab = "Yt-1",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_ma2,yt_1_ma2)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt−1
+
+#### \(Y_t\) dengan \(Y_{t-2}\)
+
+```{r}
+# Yt
+yt_ma2_lag2 <- ma2[-c(1,2)]
+
+# Yt-2
+yt_2_ma2 <- ma2[-c(299,300)]
+
+# Scatterplot
+plot(y = yt_ma2_lag2,
+     x = yt_2_ma2,
+     main = "Yt vs Yt-2",
+     xlab = "Yt-2",
+     ylab = "Yt")
+```
+```{r}
+cor(yt_ma2_lag2,yt_2_ma2)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-2 dan lebih lemah dibandingkan hubungan dengan Yt-1
+
+#### \(Y_t\) dengan \(Y_{t-3}\)
+
+```{r}
+# Yt
+yt_ma2_lag3 <- ma2[-c(1,2,3)]
+
+# Yt-3
+yt_3_ma2 <- ma2[-c(298,299,300)]
+
+# Scatterplot
+plot(y = yt_ma2_lag3,
+     x = yt_3_ma2,
+     main = "Yt vs Yt-3",
+     xlab = "Yt-3",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_ma2_lag3,yt_3_ma2)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa hubungan antara Yt dengan Yt-3 sangat lemah dan mendekati tidak adanya hubungan liniear
+
+### Autokorelasi
+
+#### Autokorelasi Data Bangkitan Manual
+
+```{r}
+rho1_ma_manual <- cor(yt_ma2, yt_1_ma2)
+rho2_ma_manual <- cor(yt_ma2_lag2, yt_2_ma2)
+rho3_ma_manual <- cor(yt_ma2_lag3, yt_3_ma2)
+
+rho1_ma_manual
+rho2_ma_manual
+rho3_ma_manual
+```
+#### Autokorelasi Teoritis
+
+```{r}
+rho1_ma_teori <- (theta1 + theta1 * theta2) /
+              (1 + theta1^2 + theta2^2)
+
+rho2_ma_teori <- theta2 /
+              (1 + theta1^2 + theta2^2)
+
+rho3_ma_teori <- 0
+
+rho1_ma_teori
+rho2_ma_teori
+rho3_ma_teori
+```
+
+#### Perbandingan
+
+```{r}
+hasil_manual_ma <- data.frame(
+  Lag = c(1, 2, 3),
+  Simulasi_ma = c(rho1_ma_manual, rho2_ma_manual, rho3_ma_manual),
+  Teoritis_ma = c(rho1_ma_teori, rho2_ma_teori, rho3_ma_teori)
+)
+
+hasil_manual_ma
+```
+Hasil autokorelasi simulasi (data bangkitan) secara umum mendekati nilai teoritis, dengan pola autokorelasi yang menurun seiring bertambahnya lag dan mendekati 0 setelah lag ke-2
+
+## Pembangkitan Data dengan arima.sim()
+
+### Pembangkitan Data
+```{r}
+set.seed(1234)
+
+ma2_sim <- arima.sim(
+  list(order = c(0,0,2),
+       ma = c(0.4, 0.6)),
+  n = 300
+)
+
+ma2_sim
+```
+### Plot
+
+#### Plot Time Series
+
+```{r}
+ts.plot(ma2_sim,
+        main = "Time Series MA(2) arima.sim",
+        ylab = "Yt",
+        xlab = "Waktu")
+```
+Berdasarkan plot time series, data berfluktuasi di sekitar rata-rata yang relatif konstan dan tidak menunjukkan adanya tren maupun pola musiman yang jelas. Varians data juga terlihat relatif stabil sepanjang waktu.
+
+#### Plot ACF
+
+```{r}
+acf(ma2_sim,
+    lag.max = 20,
+    main = "ACF MA(2) arima.sim")
+```
+Berdasarkan plot ACF MA(2) manual, terlihat bahwa autokorelasi signifikan pada lag 1 dan lag 2, kemudian terputus setelah lag ke-2. Pola cut-off pada lag ke-2 ini menunjukkan karakteristik proses MA(2), sehingga hasil ACF mendukung bahwa data mengikuti model MA(2)
+
+#### Plot PACF
+
+```{r}
+pacf(ma2_sim,
+     lag.max = 20,
+     main = "PACF MA(2) arima.sim")
+```
+Berdasarkan plot PACF MA(2) manual, terlihat bahwa nilai PACF tidak terputus secara jelas pada lag tertentu, tetapi cenderung menurun dan berfluktuasi di sekitar nol. Pola tailing off pada PACF merupakan karakteristik dari model MA(2)
+
+#### Plot EACF
+
+```{r}
+TSA::eacf(ma2_sim)
+```
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(0) dan ordo MA(2)
+
+#### Identifikasi Stasioneritas
+
+```{r}
+adf.test(ma2_sim)
+```
+\(H_0\) : Data tidak stasioner dalam rataan
+\(H_1\) : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series, plot ACF, plot PACF, plot EACF
+
+```{r}
+# Geser data agar seluruh nilai positif
+ma2_sim_pos <- ma2_sim - min(ma2_sim) + 1
+
+# Box-Cox
+index_ma2_sim <- seq(1, 300)
+
+bc_ma2_sim <- MASS::boxcox(
+  ma2_sim_pos ~ index_ma2_sim,
+  lambda = seq(-2, 6, by = 0.01)
+)
+```
+
+```{r}
+# Lambda optimum
+lambda_ma2_sim <- bc_ma2_sim$x[which.max(bc_ma2_sim$y)]
+lambda_ma2_sim
+```
+```{r}
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda_ma2_sim <- bc_ma2_sim$x[
+  bc_ma2_sim$y > max(bc_ma2_sim$y) - 0.5 * qchisq(0.95, 1)
+]
+
+# Batas bawah dan batas atas
+ci_lower_ma2_sim <- min(ci_lambda_ma2_sim)
+ci_upper_ma2_sim <- max(ci_lambda_ma2_sim)
+
+c(Batas_Bawah = ci_lower_ma2_sim,
+  Batas_Atas = ci_upper_ma2_sim)
+```
+Hasil uji di atas menunjukkan nilai rounded value (λ) optimum sebesar 0.99 dan pada selang kepercayaan 95% nilai memiliki batas bawah 0,69 dan batas atas 1.31. Selang tersebut memuat nilai 1 sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam
+
+### Scatter Plot
+
+#### \(Y_t\) dengan \(Y_{t-1}\)
+
+```{r}
+# Yt
+yt_sim <- ma2_sim[-1]
+
+# Yt-1
+yt_1_sim <- ma2_sim[-300]
+
+plot(y = yt_sim,
+     x = yt_1_sim,
+     main = "Yt vs Yt-1 - arima.sim",
+     xlab = "Yt-1",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_sim,yt_1_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt−1
+
+#### \(Y_t\) dengan \(Y_{t-2}\)
+
+```{r}
+# Yt
+yt_sim_lag2 <- ma2_sim[-c(1,2)]
+
+# Yt-2
+yt_2_sim <- ma2_sim[-c(299,300)]
+
+plot(y = yt_sim_lag2,
+     x = yt_2_sim,
+     main = "Yt vs Yt-2 - arima.sim",
+     xlab = "Yt-2",
+     ylab = "Yt")
+```
+```{r}
+cor(yt_sim_lag2,yt_2_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-2 dan lebih lemah dibandingkan hubungan dengan Yt-1
+
+#### \(Y_t\) dengan \(Y_{t-3}\)
+
+```{r}
+# Yt
+yt_sim_lag3 <- ma2_sim[-c(1,2,3)]
+
+# Yt-3
+yt_3_sim <- ma2_sim[-c(298,299,300)]
+
+plot(y = yt_sim_lag3,
+     x = yt_3_sim,
+     main = "Yt vs Yt-3 - arima.sim",
+     xlab = "Yt-3",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_sim_lag3,yt_3_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa hubungan antara Yt dengan Yt-3 sangat lemah dan mendekati tidak adanya hubungan liniear
+
+### Autokorelasi
+
+#### Autokorelasi Data Bangkitan Manual
+
+```{r}
+rho1_sim <- cor(yt_sim, yt_1_sim)
+rho2_sim <- cor(yt_sim_lag2, yt_2_sim)
+rho3_sim <- cor(yt_sim_lag3, yt_3_sim)
+
+rho1_sim
+rho2_sim
+rho3_sim
+```
+#### Autokorelasi Teoritis
+
+```{r}
+rho1_ma_teori <- (theta1 + theta1 * theta2) /
+              (1 + theta1^2 + theta2^2)
+
+rho2_ma_teori <- theta2 /
+              (1 + theta1^2 + theta2^2)
+
+rho3_ma_teori <- 0
+
+rho1_ma_teori
+rho2_ma_teori
+rho3_ma_teori
+```
+
+#### Perbandingan
+
+```{r}
+hasil_sim <- data.frame(
+  Lag = c(1, 2, 3),
+  Simulasi = c(rho1_sim, rho2_sim, rho3_sim),
+  Teoritis = c(rho1_ma_teori, rho2_ma_teori, rho3_ma_teori)
+)
+
+hasil_sim
+```
+Hasil autokorelasi simulasi (data arima.sim()) secara umum mendekati nilai teoritis, dengan pola autokorelasi yang menurun seiring bertambahnya lag dan mendekati 0 setelah lag ke-2
+
+
+# AR(2)
+
+## Pembangkitan Data Manual
+
+### Pembangkitan Data
+```{r}
+set.seed(1234)
+
+n <- 300
+wn <- rnorm(n)
+
+phi1 <- 0.5
+phi2 <- 0.2
+
+ar2 <- c(1:n)
+
+ar2[1] <- wn[1]
+ar2[2] <- phi1 * ar2[1] + wn[2]
+
+for(i in 3:n){
+  ar2[i] <- phi1 * ar2[i-1] + phi2 * ar2[i-2] + wn[i]
+}
+
+ar2
+```
+### Plot
+
+#### Plot Time Series
+
+```{r}
+ts.plot(ar2,
+        main = "Time Series AR(2) Manual",
+        ylab = "Yt",
+        xlab = "Waktu")
+```
+Berdasarkan plot time series, data berfluktuasi di sekitar rata-rata yang relatif konstan dan tidak menunjukkan adanya tren maupun pola musiman yang jelas. Varians data juga terlihat relatif stabil sepanjang waktu.
+
+#### Plot ACF
+
+```{r}
+acf(ar2,
+    lag.max = 20,
+    main = "ACF AR(2) Manual")
+```
+ACF menunjukkan pola menurun secara bertahap (tails off) dari lag 1 hingga beberapa lag berikutnya
+
+#### Plot PACF
+
+```{r}
+pacf(ar2,
+     lag.max = 20,
+     main = "PACF AR(2) Manual")
+```
+Berdasarkan plot PACF AR(2) manual, PACF menunjukkan spike yang signifikan pada lag 1 dan lag 2, kemudian lag setelahnya sebagian besar berada dalam batas kepercayaan. Ini menunjukkan adanya cut-off pada lag ke-2, sehingga mengarah pada AR(2)
+
+#### Plot EACF
+
+```{r}
+TSA::eacf(ar2)
+```
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(2) dan ordo MA(0)
+
+#### Identifikasi Stasioneritas
+
+```{r}
+adf.test(ar2)
+```
+\(H_0\) : Data tidak stasioner dalam rataan
+\(H_1\) : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series, plot ACF, plot PACF, plot EACF
+
+```{r}
+# Menggeser data agar seluruh nilai positif
+ar2_pos <- ar2 - min(ar2) + 1
+
+# Membuat indeks waktu
+index <- seq(1, 300)
+
+bc_ar2 <- boxcox(
+  ar2_pos ~ index,
+  lambda = seq(-2, 6, by = 0.01)
+)
+```
+
+```{r}
+# Nilai lambda optimum
+lambda_ar2 <- bc_ar2$x[which.max(bc_ar2$y)]
+lambda_ar2
+```
+
+```{r}
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda_ar2 <- bc_ar2$x[
+  bc_ar2$y > max(bc_ar2$y) - 0.5 * qchisq(0.95, 1)
+]
+
+# Batas bawah dan batas atas
+ci_lower_ar2 <- min(ci_lambda_ar2)
+ci_upper_ar2 <- max(ci_lambda_ar2)
+
+c(Batas_Bawah = ci_lower_ar2,
+  Batas_Atas = ci_upper_ar2)
+```
+Hasil uji di atas menunjukkan nilai rounded value (λ) optimum sebesar 1.1 dan pada selang kepercayaan 95% nilai memiliki batas bawah 0,83 dan batas atas 1.39. Selang tersebut memuat nilai 1 sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam
+
+### Scatter Plot
+
+#### \(Y_t\) dengan \(Y_{t-1}\)
+
+```{r}
+# Yt
+yt_ar2 <- ar2[-1]
+
+# Yt-1
+yt_1_ar2 <- ar2[-300]
+
+# Scatterplot
+plot(y = yt_ar2,
+     x = yt_1_ar2,
+     main = "Yt vs Yt-1",
+     xlab = "Yt-1",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_ar2,yt_1_ar2)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt−1
+
+#### \(Y_t\) dengan \(Y_{t-2}\)
+
+```{r}
+# Yt
+yt_ar2_lag2 <- ar2[-c(1,2)]
+
+# Yt-2
+yt_2_ar2 <- ar2[-c(299,300)]
+
+# Scatterplot
+plot(y = yt_ar2_lag2,
+     x = yt_2_ar2,
+     main = "Yt vs Yt-2",
+     xlab = "Yt-2",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_ar2_lag2,yt_2_ar2)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-2 dan lebih lemah dibandingkan hubungan dengan Yt-1
+
+#### \(Y_t\) dengan \(Y_{t-3}\)
+
+```{r}
+# Yt
+yt_ar2_lag3 <- ar2[-c(1,2,3)]
+
+# Yt-3
+yt_3_ar2 <- ar2[-c(298,299,300)]
+
+# Scatterplot
+plot(y = yt_ar2_lag3,
+     x = yt_3_ar2,
+     main = "Yt vs Yt-3",
+     xlab = "Yt-3",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_ar2_lag3,yt_3_ar2)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-3 dan lebih lemah dibandingkan hubungan dengan Yt-1 dan Yt-2
+
+### Autokorelasi
+
+#### Autokorelasi Data Bangkitan Manual
+
+```{r}
+rho1_ar_manual <- cor(yt_ar2, yt_1_ar2)
+rho2_ar_manual <- cor(yt_ar2_lag2, yt_2_ar2)
+rho3_ar_manual <- cor(yt_ar2_lag3, yt_3_ar2)
+
+rho1_ar_manual
+rho2_ar_manual
+rho3_ar_manual
+```
+#### Autokorelasi Teoritis
+
+```{r}
+rho1_ar_teori <- phi1 / (1 - phi2)
+
+rho2_ar_teori <- phi1 * rho1_ar_teori + phi2
+
+rho3_ar_teori <- phi1 * rho2_ar_teori +
+              phi2 * rho1_ar_teori
+
+rho1_ar_teori
+rho2_ar_teori
+rho3_ar_teori
+```
+
+#### Perbandingan
+
+```{r}
+hasil_manual_ar <- data.frame(
+  Lag = c(1, 2, 3),
+  Simulasi = c(rho1_ar_manual,
+               rho2_ar_manual,
+               rho3_ar_manual),
+  Teoritis = c(rho1_ar_teori,
+               rho2_ar_teori,
+               rho3_ar_teori)
+)
+
+hasil_manual_ar
+```
+Autokorelasi pada proses AR(2) bernilai positif dan semakin menurun pada lag yang lebih tinggi. Hasil simulasi menunjukkan pola yang sejalan dengan nilai teoritis, meskipun terdapat perbedaan nilai akibat variasi sampel. Hal ini sesuai dengan karakteristik AR(2), di mana ACF menurun secara bertahap (tails off) dan tidak langsung terputus pada lag tertentu
+
+## Pembangkitan Data dengan arima.sim()
+
+### Pembangkitan Data
+```{r}
+set.seed(1234)
+
+ar2_sim <- arima.sim(
+  list(order = c(2,0,0),
+       ar = c(0.5, 0.2)),
+  n = 300
+)
+
+ar2_sim
+```
+### Plot
+
+#### Plot Time Series
+
+```{r}
+ts.plot(ar2_sim,
+        main = "Time Series AR(2) arima.sim",
+        ylab = "Yt",
+        xlab = "Waktu")
+```
+Berdasarkan plot time series, data bergerak di sekitar nilai rata-rata konstan (sekitar 0) dengan varians yang tampak stabil sepanjang waktu 
+
+#### Plot ACF
+
+```{r}
+acf(ar2_sim,
+    lag.max = 20,
+    main = "ACF AR(2) arima.sim")
+```
+ACF menunjukkan pola menurun secara bertahap (tails off) dari lag 1 hingga beberapa lag berikutnya
+
+#### Plot PACF
+
+```{r}
+pacf(ar2_sim,
+     lag.max = 20,
+     main = "PACF AR(2) arima.sim")
+```
+Berdasarkan plot PACF AR(2), PACF menunjukkan spike yang signifikan pada lag 1 dan lag 2, kemudian lag setelahnya sebagian besar berada dalam batas kepercayaan. Ini menunjukkan adanya cut-off pada lag ke-2, sehingga mengarah pada AR(2)
+
+#### Plot EACF
+
+```{r}
+TSA::eacf(ar2_sim)
+```
+Berdasarkan tabel EACF, puncak segitiga 'o' mengarah pada model ARMA(1,1). Namun, tanda 'o' juga mulai konsisten muncul pada kolom MA = 0 mulai dari AR = 1 dan AR = 2. Didukung oleh plot PACF sebelumnya yang cut-off di lag 2, maka model AR(2) tetap dipilih sebagai model terbaik yang paling sederhana
+
+#### Identifikasi Stasioneritas
+
+```{r}
+adf.test(ar2_sim)
+```
+\(H_0\) : Data tidak stasioner dalam rataan
+\(H_1\) : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series, plot ACF, plot PACF, plot EACF
+
+```{r}
+# Menggeser data agar seluruh nilai positif
+ar2_sim_pos <- ar2_sim - min(ar2_sim) + 1
+
+# Membuat indeks waktu
+index <- seq(1, 300)
+
+# Box-Cox
+bc_ar2_sim <- boxcox(
+  ar2_sim_pos ~ index,
+  lambda = seq(-2, 6, by = 0.01)
+)
+```
+
+```{r}
+lambda_ar2_sim <- bc_ar2_sim$x[which.max(bc_ar2_sim$y)]
+lambda_ar2_sim
+```
+```{r}
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda_ar2_sim <- bc_ar2_sim$x[
+  bc_ar2_sim$y > max(bc_ar2_sim$y) - 0.5 * qchisq(0.95, 1)
+]
+
+# Batas bawah dan batas atas
+ci_lower_ar2_sim <- min(ci_lambda_ar2_sim)
+ci_upper_ar2_sim <- max(ci_lambda_ar2_sim)
+
+c(Batas_Bawah = ci_lower_ar2_sim,
+  Batas_Atas = ci_upper_ar2_sim)
+```
+Hasil uji di atas menunjukkan nilai rounded value (λ) optimum sebesar 1.18 dan pada selang kepercayaan 95% nilai memiliki batas bawah 0,90 dan batas atas 1.48. Selang tersebut memuat nilai 1 sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam
+
+### Scatter Plot
+
+#### \(Y_t\) dengan \(Y_{t-1}\)
+
+```{r}
+# Yt
+yt_ar_sim <- ar2_sim[-1]
+
+# Yt-1
+yt_1_ar_sim <- ar2_sim[-300]
+
+plot(y = yt_ar_sim,
+     x = yt_1_sim,
+     main = "Yt vs Yt-1 - arima.sim",
+     xlab = "Yt-1",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_ar_sim,yt_1_ar_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt−1
+
+#### \(Y_t\) dengan \(Y_{t-2}\)
+
+```{r}
+# Yt
+yt_ar_sim_lag2 <- ar2_sim[-c(1,2)]
+
+# Yt-2
+yt_2_ar_sim <- ar2_sim[-c(299,300)]
+
+plot(y = yt_ar_sim_lag2,
+     x = yt_2_ar_sim,
+     main = "Yt vs Yt-2 - arima.sim",
+     xlab = "Yt-2",
+     ylab = "Yt")
+```
+```{r}
+cor(yt_ar_sim_lag2,yt_2_ar_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-2 dan lebih lemah dibandingkan hubungan dengan Yt-1
+
+#### \(Y_t\) dengan \(Y_{t-3}\)
+
+```{r}
+# Yt
+yt_ar_sim_lag3 <- ar2_sim[-c(1,2,3)]
+
+# Yt-3
+yt_3_ar_sim <- ar2_sim[-c(298,299,300)]
+
+plot(y = yt_ar_sim_lag3,
+     x = yt_3_ar_sim,
+     main = "Yt vs Yt-3 - arima.sim",
+     xlab = "Yt-3",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_ar_sim_lag3,yt_3_ar_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-3 dan lebih lemah dibandingkan hubungan dengan Yt-1 dan Yt-2
+
+### Autokorelasi
+
+#### Autokorelasi Data Bangkitan Manual
+
+```{r}
+rho1_ar_sim <- cor(yt_ar_sim, yt_1_ar_sim)
+rho2_ar_sim <- cor(yt_ar_sim_lag2, yt_2_ar_sim)
+rho3_ar_sim <- cor(yt_ar_sim_lag3, yt_3_ar_sim)
+
+rho1_ar_sim
+rho2_ar_sim
+rho3_ar_sim
+```
+#### Autokorelasi Teoritis
+
+```{r}
+rho1_ar_teori <- phi1 / (1 - phi2)
+
+rho2_ar_teori <- phi1 * rho1_ar_teori + phi2
+
+rho3_ar_teori <- phi1 * rho2_ar_teori +
+              phi2 * rho1_ar_teori
+
+rho1_ar_teori
+rho2_ar_teori
+rho3_ar_teori
+```
+
+#### Perbandingan
+
+```{r}
+hasil_ar_sim <- data.frame(
+  Lag = c(1, 2, 3),
+  Simulasi = c(rho1_ar_sim, rho2_ar_sim, rho3_ar_sim),
+  Teoritis = c(rho1_ar_teori, rho2_ar_teori, rho3_ar_teori)
+)
+
+hasil_ar_sim
+```
+Autokorelasi pada proses AR(2) bernilai positif dan semakin menurun pada lag yang lebih tinggi. Hasil simulasi menunjukkan pola yang sejalan dengan nilai teoritis, meskipun terdapat perbedaan nilai akibat variasi sampel. Hal ini sesuai dengan karakteristik AR(2), di mana ACF menurun secara bertahap (tails off) dan tidak langsung terputus pada lag tertentu
+
+
+# ARMA(2,2)
+
+## Pembangkitan Data Manual
+
+### Pembangkitan Data
+```{r}
+set.seed(1234)
+
+n_arma <- 300
+wn_arma <- rnorm(n_arma)
+
+phi_arma1 <- 0.5
+phi_arma2 <- 0.2
+
+theta_arma1 <- 0.4
+theta_arma2 <- 0.6
+
+arma <- c(1:n_arma)
+
+arma[1] <- wn_arma[1]
+
+arma[2] <- phi_arma1 * arma[1] +
+           wn_arma[2] +
+           theta_arma1 * wn_arma[1]
+
+for(i in 3:n_arma){
+  arma[i] <- phi_arma1 * arma[i-1] +
+             phi_arma2 * arma[i-2] +
+             wn_arma[i] +
+             theta_arma1 * wn_arma[i-1] +
+             theta_arma2 * wn_arma[i-2]
+}
+
+arma
+```
+### Plot
+
+#### Plot Time Series
+
+```{r}
+ts.plot(arma,
+        main = "Time Series Plot ARMA(2,2)",
+        ylab = "ARMA",
+        xlab = "Time")
+```
+Berdasarkan plot time series, data berfluktuasi di sekitar rata-rata yang relatif konstan dan tidak menunjukkan adanya tren maupun pola musiman yang jelas. Varians data juga terlihat relatif stabil sepanjang waktu.
+
+#### Plot ACF
+
+```{r}
+acf(arma,
+    lag.max = 20,
+    main = "ACF ARMA(2,2)")
+```
+ACF menunjukkan pola menurun secara bertahap (tails off) dari lag 1 hingga beberapa lag berikutnya
+
+#### Plot PACF
+
+```{r}
+pacf(arma,
+     lag.max = 20,
+     main = "PACF ARMA(2,2)")
+```
+Plot PACF menunjukkan spike yang signifikan pada lag 1, kemudian nilai PACF pada lag berikutnya cenderung berada di dalam batas signifikansi, meskipun terdapat beberapa spike yang keluar dari batas. Secara umum, pola PACF menunjukkan cut-off pada lag 1. Hal ini menunjukkan adanya ketergantungan parsial yang kuat pada lag 1. Namun, karena data berasal dari proses ARMA(2,2), pola PACF tidak harus terputus tepat pada orde AR = 2. Oleh karena itu, identifikasi model tidak dapat dilakukan hanya berdasarkan PACF dan perlu didukung oleh ACF serta EACF
+
+#### Plot EACF
+
+```{r}
+TSA::eacf(arma)
+```
+Berdasarkan tabel EACF, pola o mulai terlihat pada beberapa lag di sekitar AR = 2 dan MA = 2. Namun, pola segitiga yang terbentuk tidak terlalu jelas karena masih terdapat beberapa nilai x pada area tersebut. Dengan demikian, EACF memberikan indikasi bahwa model ARMA(2,2) dapat menjadi salah satu kandidat model, tetapi identifikasi orde perlu didukung eksplorasi lebih lanjut
+
+#### Identifikasi Stasioneritas
+
+```{r}
+adf.test(arma)
+```
+\(H_0\) : Data tidak stasioner dalam rataan
+\(H_1\) : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak dan menandakan bahwa data stasioner dalam rataan. 
+
+```{r}
+arma_pos <- arma - min(arma) + 1
+
+index_arma <- seq(1, 300)
+
+bc_arma <- boxcox(
+  arma_pos ~ index_arma,
+  lambda = seq(-2, 6, by = 0.01)
+)
+```
+
+```{r}
+# Nilai lambda optimum
+lambda_arma <- bc_arma$x[which.max(bc_arma$y)]
+lambda_arma
+```
+
+```{r}
+ci_lambda_arma <- bc_arma$x[
+  bc_arma$y > max(bc_arma$y) -
+    0.5 * qchisq(0.95, 1)
+]
+
+ci_lower_arma <- min(ci_lambda_arma)
+ci_upper_arma <- max(ci_lambda_arma)
+
+c(Batas_Bawah = ci_lower_arma,
+  Batas_Atas = ci_upper_arma)
+```
+Hasil uji di atas menunjukkan nilai rounded value (λ) optimum sebesar 1.18 dan pada selang kepercayaan 95% nilai memiliki batas bawah 0,94 dan batas atas 1.43. Selang tersebut memuat nilai 1 sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam
+
+### Scatter Plot
+
+#### \(Y_t\) dengan \(Y_{t-1}\)
+
+```{r}
+yt_arma <- arma[2:300]
+yt_1_arma <- arma[1:299]
+
+plot(yt_1_arma, yt_arma,
+     main = "Scatter Plot Yt terhadap Yt-1",
+     xlab = "Yt-1",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_arma,yt_1_arma)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt−1
+
+#### \(Y_t\) dengan \(Y_{t-2}\)
+
+```{r}
+yt_arma_lag2 <- arma[3:300]
+yt_2_arma <- arma[1:298]
+
+plot(yt_arma_lag2, yt_2_arma,
+     main = "Scatter Plot Yt terhadap Yt-2",
+     xlab = "Yt-2",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_arma_lag2,yt_2_arma)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-2 dan lebih lemah dibandingkan hubungan dengan Yt-1
+
+#### \(Y_t\) dengan \(Y_{t-3}\)
+
+```{r}
+yt_arma_lag3 <- arma[4:300]
+yt_3_arma <- arma[1:297]
+
+plot(yt_arma_lag3, yt_3_arma,
+     main = "Scatter Plot Yt terhadap Yt-3",
+     xlab = "Yt-3",
+     ylab = "Yt")
+
+
+```
+
+```{r}
+cor(yt_arma_lag3,yt_3_arma)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-3 dan lebih lemah dibandingkan hubungan dengan Yt-1 dan Yt-2
+
+### Autokorelasi
+
+#### Autokorelasi Data Bangkitan Manual
+
+```{r}
+rho1_arma_manual <- cor(arma[2:300],arma[1:299])
+rho2_arma_manual <- cor(arma[3:300],arma[1:298])
+rho3_arma_manual <- cor(arma[4:300],arma[1:297])
+
+rho1_arma_manual
+rho2_arma_manual
+rho3_arma_manual
+```
+#### Autokorelasi Teoritis
+
+```{r}
+psi_arma <- numeric(1000)
+
+psi_arma[1] <- 1
+
+psi_arma[2] <- phi_arma1 + theta_arma1
+
+psi_arma[3] <- phi_arma1 * psi_arma[2] +
+               phi_arma2 +
+               theta_arma2
+
+for(i in 4:1000){
+  psi_arma[i] <- phi_arma1 * psi_arma[i-1] +
+                 phi_arma2 * psi_arma[i-2]
+}
+
+gamma_arma <- numeric(4)
+
+for(k in 0:3){
+  gamma_arma[k+1] <-
+    sum(
+      psi_arma[1:(1000-k)] *
+      psi_arma[(1+k):1000]
+    )
+}
+
+rho_arma_teori <- gamma_arma / gamma_arma[1]
+
+rho_arma_teori
+```
+
+#### Perbandingan
+
+```{r}
+data.frame(
+  Lag = 1:3,
+  Simulasi = c(
+    rho1_arma_manual,
+    rho2_arma_manual,
+    rho3_arma_manual
+  ),
+  Teoritis = c(
+    rho_arma_teori[2],
+    rho_arma_teori[3],
+    rho_arma_teori[4]
+  ))
+```
+Autokorelasi pada proses ARMA(2,2) bernilai positif dan semakin menurun pada lag yang lebih tinggi. Hasil simulasi menunjukkan pola yang sejalan dengan nilai teoritis, meskipun terdapat perbedaan nilai akibat variasi sampel. Hal ini sesuai dengan karakteristik ARMA(2,2), di mana ACF menurun secara bertahap (tails off) dan tidak langsung terputus pada lag tertentu
+
+
+## Pembangkitan Data dengan arima.sim()
+
+### Pembangkitan Data
+```{r}
+set.seed(2026)
+
+n_arma_sim <- 300
+
+arma_sim <- arima.sim(
+  list(
+    order = c(2,0,2),
+    ar = c(0.5, 0.2),
+    ma = c(0.4, 0.6)
+  ),
+  n = n_arma_sim
+)
+
+arma_sim
+```
+### Plot
+
+#### Plot Time Series
+
+```{r}
+ts.plot(arma_sim,
+        main = "Time Series Plot ARMA(2,2) - arima.sim()",
+        ylab = "ARMA",
+        xlab = "Time")
+```
+Berdasarkan plot time series, data berfluktuasi di sekitar rata-rata yang relatif konstan dan tidak menunjukkan adanya tren maupun pola musiman yang jelas.
+
+#### Plot ACF
+
+```{r}
+acf(arma_sim,
+    lag.max = 20,
+    main = "ACF ARMA(2,2) - arima.sim()")
+```
+ACF menunjukkan pola menurun secara bertahap (tails off) dari lag 1 hingga beberapa lag berikutnya
+
+#### Plot PACF
+
+```{r}
+pacf(arma_sim,
+     lag.max = 20,
+     main = "PACF ARMA(2,2) - arima.sim()")
+```
+Plot PACF menunjukkan spike yang signifikan pada lag 1, kemudian nilai PACF pada lag berikutnya cenderung berada di dalam batas signifikansi, meskipun terdapat beberapa spike yang keluar dari batas. Secara umum, pola PACF menunjukkan cut-off pada lag 1. Hal ini menunjukkan adanya ketergantungan parsial yang kuat pada lag 1. Namun, karena data berasal dari proses ARMA(2,2), pola PACF tidak harus terputus tepat pada orde AR = 2. Oleh karena itu, identifikasi model tidak dapat dilakukan hanya berdasarkan PACF dan perlu didukung oleh ACF serta EACF
+
+#### Plot EACF
+
+```{r}
+TSA::eacf(arma_sim)
+```
+Pola EACF belum membentuk segitiga yang tegas, tetapi menunjukkan kandidat model pada AR = 2 dan MA = 2. Dengan demikian, ARMA(2,2) dapat menjadi model terpilih tetapi identifikasi orde perlu didukung eksplorasi lebih lanjut
+
+#### Identifikasi Stasioneritas
+
+```{r}
+adf.test(arma_sim)
+```
+\(H_0\) : Data tidak stasioner dalam rataan
+\(H_1\) : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak dan menandakan bahwa data stasioner dalam rataan. 
+
+```{r}
+arma_sim_pos <- arma_sim - min(arma_sim) + 1
+
+index_arma_sim <- seq(1, 300)
+
+bc_arma_sim <- boxcox(
+  arma_sim_pos ~ index_arma_sim,
+  lambda = seq(-2, 6, by = 0.01)
+)
+```
+
+```{r}
+# Nilai lambda optimum
+lambda_arma_sim <- bc_arma_sim$x[
+  which.max(bc_arma_sim$y)
+]
+
+lambda_arma_sim
+```
+
+```{r}
+ci_lambda_arma_sim <- bc_arma_sim$x[
+  bc_arma_sim$y >
+    max(bc_arma_sim$y) -
+    0.5 * qchisq(0.95, 1)
+]
+
+ci_lower_arma_sim <- min(ci_lambda_arma_sim)
+ci_upper_arma_sim <- max(ci_lambda_arma_sim)
+
+c(
+  Batas_Bawah = ci_lower_arma_sim,
+  Batas_Atas = ci_upper_arma_sim
+)
+```
+Hasil uji di atas menunjukkan nilai rounded value (λ) optimum sebesar 1.11 dan pada selang kepercayaan 95% nilai memiliki batas bawah 0.83 dan batas atas 1.40. Selang tersebut memuat nilai 1 sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam
+
+### Scatter Plot
+
+#### \(Y_t\) dengan \(Y_{t-1}\)
+
+```{r}
+yt_arma_sim <- arma_sim[2:300]
+yt_1_arma_sim <- arma_sim[1:299]
+
+plot(yt_1_arma_sim, yt_arma_sim,
+     main = "Scatter Plot Yt terhadap Yt-1 - arima.sim()",
+     xlab = "Yt-1",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_arma_sim, yt_1_arma_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt−1
+
+#### \(Y_t\) dengan \(Y_{t-2}\)
+
+```{r}
+yt_arma_sim_lag2 <- arma_sim[3:300]
+yt_2_arma_sim <- arma_sim[1:298]
+
+plot(yt_arma_sim_lag2, yt_2_arma_sim,
+     main = "Scatter Plot Yt terhadap Yt-2 - arima.sim()",
+     xlab = "Yt-2",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_arma_sim_lag2, yt_2_arma_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-2 dan lebih lemah dibandingkan hubungan dengan Yt-1
+
+#### \(Y_t\) dengan \(Y_{t-3}\)
+
+```{r}
+yt_arma_sim_lag3 <- arma_sim[4:300]
+yt_3_arma_sim <- arma_sim[1:297]
+
+plot(yt_arma_sim_lag3, yt_3_arma_sim,
+     main = "Scatter Plot Yt terhadap Yt-3 - arima.sim()",
+     xlab = "Yt-3",
+     ylab = "Yt")
+```
+
+```{r}
+cor(yt_arma_sim_lag3, yt_3_arma_sim)
+```
+Berdasarkan scatterplot dan nilai korelasi tersebut, terlihat bahwa terdapat hubungan positif antara Yt dengan Yt-3 dan lebih lemah dibandingkan hubungan dengan Yt-1 dan Yt-2
+
+### Autokorelasi
+
+#### Autokorelasi Data Bangkitan Manual
+
+```{r}
+rho1_arma_sim <- cor(arma_sim[2:300],arma_sim[1:299])
+
+rho2_arma_sim <- cor(arma_sim[3:300],arma_sim[1:298])
+
+rho3_arma_sim <- cor(arma_sim[4:300],arma_sim[1:297])
+
+rho1_arma_sim
+rho2_arma_sim
+rho3_arma_sim
+```
+#### Autokorelasi Teoritis
+
+```{r}
+psi_arma_sim <- numeric(1000)
+
+psi_arma_sim[1] <- 1
+
+psi_arma_sim[2] <- 0.5 + 0.4
+
+psi_arma_sim[3] <- 0.5 * psi_arma_sim[2] +
+                   0.2 +
+                   0.6
+
+for(i in 4:1000){
+  psi_arma_sim[i] <- 0.5 * psi_arma_sim[i-1] +
+                     0.2 * psi_arma_sim[i-2]
+}
+
+gamma_arma_sim <- numeric(4)
+
+for(k in 0:3){
+  gamma_arma_sim[k+1] <-
+    sum(
+      psi_arma_sim[1:(1000-k)] *
+      psi_arma_sim[(1+k):1000]
+    )
+}
+
+rho_arma_teori_sim <- gamma_arma_sim / gamma_arma_sim[1]
+
+rho_arma_teori_sim
+```
+
+#### Perbandingan
+
+```{r}
+data.frame(
+  Lag = 1:3,
+  Simulasi = c(
+    rho1_arma_sim,
+    rho2_arma_sim,
+    rho3_arma_sim
+  ),
+  Teoritis = c(
+    rho_arma_teori_sim[2],
+    rho_arma_teori_sim[3],
+    rho_arma_teori_sim[4]
+  ))
+```
+Autokorelasi pada proses ARMA(2,2) bernilai positif dan semakin menurun pada lag yang lebih tinggi. Hasil simulasi menunjukkan pola yang sejalan dengan nilai teoritis, meskipun terdapat perbedaan nilai akibat variasi sampel. Hal ini sesuai dengan karakteristik ARMA(2,2), di mana ACF menurun secara bertahap (tails off) dan tidak langsung terputus pada lag tertentu
+
