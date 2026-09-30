@@ -1,0 +1,271 @@
+---
+title: '[MPDW] Tugas Praktikum 6'
+author: "Ainur Roudlotul Jannah Firdaus"
+date: "2026-09-30"
+output: rmdformats::readthedown
+---
+
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(forecast)
+library(TSA)
+library(TTR)
+library(aTSA)
+library(graphics)
+```
+
+# Data
+
+## Import Data
+
+```{r}
+library(readxl)
+df <- read_excel("D:\\SMT 5\\Metode Peramalan Deret Waktu\\Tugas\\Tugas Praktikum 1\\100 Gugus Data Kelompok.xlsx")
+df
+```
+
+```{r}
+df.train <- df$Monorail_User[1:80]
+df.test <- df$Monorail_User[81:100]
+```
+
+## Eksplorasi Data
+
+```{r}
+plot(df.train,
+     col = "navyblue",
+     lwd = 1,
+     type = "o",
+     xlab = "Time",
+     ylab = "Data")
+```
+
+```{r}
+acf(df.train, main="ACF", lag.max=20)
+```
+
+```{r}
+tseries::adf.test(df.train) 
+```
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat p-value sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa data stasioner dalam rataan
+
+```{r}
+index <- seq(1:80)
+
+# Box-Cox
+bc <- boxcox(
+  df.train~index,
+  lambda = seq(0, 3, by = 1)
+)
+```
+
+```{r}
+# Nilai lambda optimum
+lambda <- bc$x[which.max(bc$y)]
+lambda
+```
+```{r}
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+Gambar di atas menunjukkan nilai rounded value ($\lambda$) optimum sebesar 1,24 dan pada selang kepercayaan 95% nilai memiliki batas bawah 0,06 dan batas atas 2,42. Selang tersebut memuat nilai satu sehingga dapat dikatakan bahwa data bangkitan stasioner dalam ragam.
+
+## Spesifikasi Model
+
+```{r}
+#---SPESIFIKASI MODEL---#
+par(mfrow = c(1,2))
+acf(df.train, main="ACF", lag.max=20) #ARIMA(0,0,2)
+pacf(df.train, main="PACF", lag.max=20) #ARIMA(1,0,0)
+```
+
+```{r}
+eacf(df.train) 
+```
+Berdasarkan plot EACF model tentatif yang terbentuk adalah ARIMA(1,0,7), ARIMA(2,0,1), dan ARIMA(3,0,2)
+
+## Pendugaan Parameter
+
+```{r}
+model_107 <- Arima(df.train, order = c(1,0,7), method = "ML")
+lmtest::coeftest(model_107)
+model_201 <- Arima(df.train, order = c(2,0,1), method = "ML")
+lmtest::coeftest(model_201)
+model_302 <- Arima(df.train, order = c(3,0,2), method = "ML")
+lmtest::coeftest(model_302)
+```
+
+```{r}
+hasil_eacf <- data.frame(
+  Model = c("ARIMA(1,0,7)",
+            "ARIMA(2,0,1)",
+            "ARIMA(3,0,2)"),
+  AIC = c(AIC(model_107),
+          AIC(model_201),
+          AIC(model_302)),
+  BIC = c(BIC(model_107),
+          BIC(model_201),
+          BIC(model_302))
+)
+
+hasil_eacf
+```
+Berdasarkan hasil perbandingan model tentatif, ARIMA(2,0,1) memiliki nilai AIC dan BIC terkecil dibandingkan model lainnya. Selain itu, seluruh parameter pada model ARIMA(2,0,1) signifikan. Oleh karena itu, ARIMA(2,0,1) dipilih sebagai model terpilih sementara untuk tahap analisis sisaan dan overfitting
+
+## Analisis Sisaan
+
+```{r}
+# Sisaan model ARIMA(2,0,1)
+sisaan_201 <- residuals(model_201)
+
+# Plot diagnostik sisaan
+par(mfrow = c(2,2))
+
+# Q-Q Plot
+qqnorm(sisaan_201)
+qqline(sisaan_201)
+
+# Sisaan terhadap waktu
+plot(sisaan_201, type = "l",
+     main = "Plot Sisaan ARIMA(2,0,1)",
+     xlab = "Waktu",
+     ylab = "Sisaan")
+abline(h = 0, col = "red")
+
+# ACF sisaan
+acf(sisaan_201, main = "ACF Sisaan")
+
+# PACF sisaan
+pacf(sisaan_201, main = "PACF Sisaan")
+
+par(mfrow = c(1,1))
+```
+
+```{r}
+ks.test(
+  sisaan_201,
+  "pnorm",
+  mean = mean(sisaan_201),
+  sd = sd(sisaan_201)
+)
+```
+```{r}
+Box.test(
+  sisaan_201,
+  lag = 1,
+  type = "Ljung-Box"
+)
+```
+```{r}
+Box.test(
+  sisaan_201^2,
+  lag = 1,
+  type = "Ljung-Box"
+)
+```
+```{r}
+t.test(sisaan_201, mu = 0)
+```
+Berdasarkan hasil analisis sisaan model ARIMA(2,0,1), uji Kolmogorov-Smirnov menghasilkan p-value sebesar 0,006539 < 0,05 sehingga **sisaan tidak berdistribusi normal.** Uji Ljung-Box pada sisaan menghasilkan p-value sebesar 0,8838 > 0,05 sehingga **tidak terdapat autokorelasi yang signifikan.** Uji Ljung-Box pada sisaan kuadrat menghasilkan p-value sebesar 0,3413 > 0,05 sehingga **tidak terdapat efek ARCH.** Selanjutnya, uji t menghasilkan p-value sebesar 0,9956 > 0,05 sehingga **rataan sisaan tidak berbeda signifikan dari nol.** Dengan demikian, sisaan model ARIMA(2,0,1) **tidak memenuhi asumsi normalitas, tetapi telah memenuhi asumsi independensi, ragam konstan, dan rataan nol.**
+
+## Overfitting
+
+Tahapan selanjutnya adalah overfitting dilakukan dengan menaikkan orde AR(p) dan MA(q) dari model ARIMA(2,0,1) untuk melihat apakah terdapat model lain yang lebih baik dari model saat ini. Kandidat model overfitting adalah ARIMA(2,0,2) dan ARIMA(3,0,1).
+
+```{r}
+model_202 <- Arima(df.train, order = c(2,0,2), method = "ML")
+lmtest::coeftest(model_202)
+model_301 <- Arima(df.train, order = c(3,0,1), method = "ML")
+lmtest::coeftest(model_301)
+```
+
+
+```{r}
+overfitting <- data.frame(
+  Model = c("ARIMA(2,0,1)",
+            "ARIMA(2,0,2)",
+            "ARIMA(3,0,1)"),
+  AIC = c(AIC(model_201),
+          AIC(model_202),
+          AIC(model_301)),
+  BIC = c(BIC(model_201),
+          BIC(model_202),
+          BIC(model_301))
+)
+
+overfitting
+```
+Hasil overfitting menunjukkan bahwa ARIMA(2,0,2) dan ARIMA(3,0,1) tidak memberikan peningkatan yang cukup dibandingkan ARIMA(2,0,1). ARIMA(2,0,2) memiliki AIC yang sedikit lebih kecil, tetapi BIC lebih besar, sedangkan ARIMA(3,0,1) memiliki AIC dan BIC lebih besar serta tidak seluruh parameternya signifikan. Oleh karena itu, model ARIMA(2,0,1) tetap dipertahankan sebagai model terpilih
+
+# Forecasting
+
+```{r}
+ramalan <- forecast::forecast(model_201, h = 20) 
+ramalan
+```
+
+```{r}
+data.ramalan <- ramalan$mean
+plot(ramalan)
+```
+Berdasarkan hasil plot ramalan di atas, dapat dilihat bahwa ramalan ARIMA(2,0,1) cenderung menurun di awal periode dan stabil hingga akhir periode. Selanjutnya, dapat dicari nilai akurasi antara hasil ramalan dengan data uji sebagai berikut
+
+```{r}
+perbandingan<-matrix(data=c(df.test, data.ramalan),
+                     nrow = 20, ncol = 2)
+colnames(perbandingan)<-c("Aktual","Hasil Forecast")
+perbandingan
+```
+```{r}
+# Akurasi
+accuracy(data.ramalan, df.test)
+```
+```{r}
+data.aktual <- c(df.train, df.test)
+```
+
+```{r}
+plot(data.aktual,
+     type = "l",
+     col = "black",
+     lwd = 2,
+     xlab = "Waktu",
+     ylab = "Nilai",
+     main = "Perbandingan Data Aktual dan Hasil Forecast")
+
+# Hasil forecast
+lines(
+  (length(df.train) + 1):(length(df.train) + 20),
+  as.numeric(ramalan$mean),
+  col = "red",
+  lwd = 2
+)
+
+# Batas data train dan test
+abline(
+  v = length(df.train),
+  lty = 2
+)
+
+legend(
+  "topleft",
+  legend = c("Data Aktual", "Hasil Forecast"),
+  col = c("black", "red"),
+  lty = 1,
+  lwd = 2
+)
+```
+
